@@ -4,17 +4,19 @@
 # to run the Samba torture testsuite.
 %bcond_with testsuite
 # ctdb is enabled by default, you can disable it with: --without clustering
-%bcond_without clustering
+%bcond_with clustering
 
-%define main_release 0
+# XXX: Using a Github fork
+%define github_commit 27e43e1
+%define main_release 1.py3patch.%{github_commit}
 
-%define samba_version 4.6.5
+%define samba_version 4.7
 %define talloc_version 2.1.9
 %define tdb_version 1.3.12
 %define tevent_version 0.9.31
-%define ldb_version 1.1.29
+%define ldb_version 1.1.31
 # This should be rc1 or nil
-%define pre_release %nil
+%define pre_release rc0
 
 %if "x%{?pre_release}" != "x"
 %define samba_release 0.%{main_release}.%{pre_release}%{?dist}
@@ -50,7 +52,7 @@
 %endif
 %endif
 
-%global libwbc_alternatives_version 0.13
+%global libwbc_alternatives_version 0.14
 %global libwbc_alternatives_suffix %nil
 %if 0%{?__isa_bits} == 64
 %global libwbc_alternatives_suffix -64
@@ -100,9 +102,10 @@ License:        GPLv3+ and LGPLv3+
 URL:            http://www.samba.org/
 
 # This is a xz recompressed file of https://ftp.samba.org/pub/samba/samba-%{version}%{pre_release}.tar.gz
-Source0:        samba-%{version}%{pre_release}.tar.xz
-Source1:        https://ftp.samba.org/pub/samba/samba-%{version}%{pre_release}.tar.asc
-Source2:        gpgkey-52FBC0B86D954B0843324CDC6F33915B6568B7EA.gpg
+# XXX: Using a Github fork
+Source0:        https://github.com/encukou/samba/tarball/%{github_commit}#/%{name}-%{version}%{pre_release}.tar.gz
+#Source1:        https://ftp.samba.org/pub/samba/samba-%{version}%{pre_release}.tar.asc
+#Source2:        gpgkey-52FBC0B86D954B0843324CDC6F33915B6568B7EA.gpg
 
 # Red Hat specific replacement-files
 Source10: samba.log
@@ -175,12 +178,16 @@ BuildRequires: python-devel
 BuildRequires: python2-pygpgme
 BuildRequires: python2-subunit
 BuildRequires: python-tevent
+BuildRequires: python3-devel
+BuildRequires: python3-tevent
 BuildRequires: quota-devel
 BuildRequires: readline-devel
 BuildRequires: sed
 BuildRequires: xfsprogs-devel
 BuildRequires: xz
 BuildRequires: zlib-devel >= 1.2.3
+BuildRequires: /usr/bin/perl
+BuildRequires: /usr/bin/zcat
 
 BuildRequires: pkgconfig(libsystemd)
 
@@ -195,6 +202,7 @@ BuildRequires: libcephfs1-devel
 BuildRequires: gnutls-devel >= 3.4.7
 # Required by samba-tool to run tests
 BuildRequires: python-crypto
+BuildRequires: python3-crypto
 %endif
 
 # pidl requirements
@@ -205,6 +213,7 @@ BuildRequires: perl(Parse::Yapp)
 
 BuildRequires: libtalloc-devel >= %{libtalloc_version}
 BuildRequires: pytalloc-devel >= %{libtalloc_version}
+BuildRequires: python3-talloc-devel >= %{libtalloc_version}
 %endif
 
 %if ! %with_internal_tevent
@@ -212,13 +221,16 @@ BuildRequires: pytalloc-devel >= %{libtalloc_version}
 
 BuildRequires: libtevent-devel >= %{libtevent_version}
 BuildRequires: python-tevent >= %{libtevent_version}
+BuildRequires: python3-tevent >= %{libtevent_version}
 %endif
 
 %if ! %with_internal_ldb
-%global libldb_version 1.1.29
+%global libldb_version 1.1.31
 
 BuildRequires: libldb-devel >= %{libldb_version}
 BuildRequires: pyldb-devel >= %{libldb_version}
+BuildRequires: python3-ldb >= %{libldb_version}
+BuildRequires: python3-ldb-devel >= %{libldb_version}
 %endif
 
 %if ! %with_internal_tdb
@@ -226,12 +238,14 @@ BuildRequires: pyldb-devel >= %{libldb_version}
 
 BuildRequires: libtdb-devel >= %{libtdb_version}
 BuildRequires: python-tdb >= %{libtdb_version}
+BuildRequires: python3-tdb >= %{libtdb_version}
 %endif
 
 %if %{with testsuite}
 BuildRequires: ldb-tools
 BuildRequires: python2-pygpgme
 BuildRequires: libcmocka-devel
+BuildRequires: python3-pygpgme
 %endif
 
 # filter out perl requirements pulled in from examples in the docdir.
@@ -330,10 +344,12 @@ Requires: %{name} = %{samba_depver}
 Requires: %{name}-libs = %{samba_depver}
 Requires: %{name}-dc-libs = %{samba_depver}
 Requires: %{name}-python = %{samba_depver}
+Requires: python3-%{name} = %{samba_depver}
 Requires: %{name}-winbind = %{samba_depver}
 %if %{with_dc}
 # samba-tool requirements
 Requires: python-crypto
+Requires: python3-crypto
 %endif
 
 Provides: samba4-dc = %{samba_depver}
@@ -489,6 +505,26 @@ Obsoletes: samba4-python < %{samba_depver}
 The %{name}-python package contains the Python libraries needed by programs
 that use SMB, RPC and other Samba provided protocols in Python programs.
 
+### PYTHON3
+%package -n python3-%{name}
+Summary: Samba Python3 libraries
+Requires: %{name} = %{samba_depver}
+Requires: %{name}-client-libs = %{samba_depver}
+Requires: %{name}-libs = %{samba_depver}
+Requires: python3-tevent
+Requires: python3-tdb
+Requires: python3-ldb
+# XXX: Need pytalloc with "pytalloc_GetObjectType" ported;
+# this is not captured in dependencies yet
+Requires: python3-talloc
+
+Provides: python3-samba4 = %{samba_depver}
+Obsoletes: python3-samba4 < %{samba_depver}
+
+%description -n python3-%{name}
+The python3-%{name} package contains the Python 3 libraries needed by programs
+that use SMB, RPC and other Samba provided protocols in Python 3 programs.
+
 ### PIDL
 %package pidl
 Summary: Perl IDL compiler
@@ -523,6 +559,8 @@ Requires: libsmbclient = %{samba_depver}
 %if %with_libwbclient
 Requires: libwbclient = %{samba_depver}
 %endif
+
+Requires: libcmocka-devel
 
 Provides: samba4-test = %{samba_depver}
 Obsoletes: samba4-test < %{samba_depver}
@@ -679,8 +717,8 @@ and use CTDB instead.
 
 
 %prep
-xzcat %{SOURCE0} | gpgv2 --quiet --keyring %{SOURCE2} %{SOURCE1} -
-%autosetup -n samba-%{version}%{pre_release} -p1
+#zcat %{SOURCE0} | gpgv2 --quiet --keyring %{SOURCE2} %{SOURCE1} -
+%autosetup -n encukou-samba-%{github_commit} -p1
 
 %build
 %global _talloc_lib ,talloc,pytalloc,pytalloc-util
@@ -762,13 +800,87 @@ xzcat %{SOURCE0} | gpgv2 --quiet --keyring %{SOURCE2} %{SOURCE1} -
 %if %{with testsuite}
         --enable-selftest \
 %endif
-        --with-systemd
+        --with-systemd \
+        --extra-python=%{__python3}
 
 make %{?_smp_mflags}
 
 %install
 rm -rf %{buildroot}
 make %{?_smp_mflags} install DESTDIR=%{buildroot}
+
+# XXX: Remove Python3 files with bad syntax
+# (needs to be done after install; before that the py2 and py3 versions
+#  are the same)
+filenames=$(echo "
+    dbchecker.py
+    drs_utils.py
+    join.py
+    kcc/__init__.py
+    kcc/graph_utils.py
+    kcc/kcc_utils.py
+    kcc/ldif_import_export.py
+    ms_display_specifiers.py
+    ms_schema.py
+    netcmd/__init__.py
+    netcmd/common.py
+    netcmd/delegation.py
+    netcmd/dns.py
+    netcmd/domain.py
+    netcmd/drs.py
+    netcmd/fsmo.py
+    netcmd/gpo.py
+    netcmd/group.py
+    netcmd/ldapcmp.py
+    netcmd/ntacl.py
+    netcmd/rodc.py
+    netcmd/sites.py
+    netcmd/testparm.py
+    netcmd/user.py
+    ntacls.py
+    provision/__init__.py
+    provision/backend.py
+    provision/sambadns.py
+    remove_dc.py
+    sites.py
+    subnets.py
+    tests/auth_log.py
+    tests/auth_log_base.py
+    tests/auth_log_pass_change.py
+    tests/blackbox/ndrdump.py
+    tests/dcerpc/array.py
+    tests/dcerpc/dnsserver.py
+    tests/dcerpc/integer.py
+    tests/dcerpc/sam.py
+    tests/dcerpc/testrpc.py
+    tests/dcerpc/unix.py
+    tests/dns.py
+    tests/dns_base.py
+    tests/dns_forwarder.py
+    tests/dns_forwarder_helpers/server.py
+    tests/docs.py
+    tests/netcmd.py
+    tests/posixacl.py
+    tests/samba3.py
+    tests/samba3sam.py
+    tests/samba_tool/dnscmd.py
+    tests/samba_tool/fsmo.py
+    tests/source.py
+    upgrade.py
+    upgradehelpers.py
+    web_server/__init__.py
+")
+for file in $filenames; do
+    filename="%{buildroot}/%{python3_sitearch}/samba/$file"
+    if python3 -c "with open('$filename') as f: compile(f.read(), '$file', 'exec')"; then
+        echo "python3 compilation of $file succeeded unexpectedly"
+        exit 1
+    else
+        echo "python3 compilation of $file failed, removing"
+        rm "$filename"
+    fi
+done
+
 
 install -d -m 0755 %{buildroot}/usr/{sbin,bin}
 install -d -m 0755 %{buildroot}%{_libdir}/security
@@ -879,6 +991,15 @@ done
 # This makes the right links, as rpmlint requires that
 # the ldconfig-created links be recorded in the RPM.
 /sbin/ldconfig -N -n %{buildroot}%{_libdir}
+
+find %{buildroot}%{python2_sitearch} -name "*.pyc" -print -delete
+
+# XXX: What is this?
+rm -f %{buildroot}%{_libdir}/samba/rpc/test_dummy_module.so
+rm -f %{buildroot}%{_libdir}/samba/libcmocka-samba4.so
+rm -f %{buildroot}%{python2_sitearch}/_ldb_text.py*
+rm -f %{buildroot}%{python3_sitearch}/_ldb_text.py
+rm -rf %{buildroot}%{python3_sitearch}/__pycache__/
 
 %if %{with testsuite}
 %check
@@ -1059,7 +1180,7 @@ rm -rf %{buildroot}
 %dir %{_libdir}/samba/auth
 %{_libdir}/samba/auth/script.so
 %{_libdir}/samba/auth/unix.so
-%{_libdir}/samba/auth/wbc.so
+#%{_libdir}/samba/auth/wbc.so      # Removed upstream (ccadd26ac7fa62520db5975278381b801824f8da)
 %dir %{_libdir}/samba/vfs
 %{_libdir}/samba/vfs/acl_tdb.so
 %{_libdir}/samba/vfs/acl_xattr.so
@@ -1272,7 +1393,9 @@ rm -rf %{buildroot}
 %{_libdir}/samba/libaddns-samba4.so
 %{_libdir}/samba/libads-samba4.so
 %{_libdir}/samba/libasn1util-samba4.so
-%{_libdir}/samba/libauth-sam-reply-samba4.so
+#{_libdir}/samba/libauth-sam-reply-samba4.so  # Removed upstream (8154acfd0d0bc00115a1aa65963f4f8c00fe4312)
+# Added upstream (8154acfd0d0bc00115a1aa65963f4f8c00fe4312):
+%{_libdir}/samba/libcommon-auth-samba4.so
 %{_libdir}/samba/libauth-samba4.so
 %{_libdir}/samba/libauthkrb5-samba4.so
 %{_libdir}/samba/libcli-cldap-samba4.so
@@ -1356,6 +1479,8 @@ rm -rf %{buildroot}
 %{_libdir}/samba/libtalloc.so.%{talloc_version}
 %{_libdir}/samba/libpytalloc-util.so.2
 %{_libdir}/samba/libpytalloc-util.so.%{talloc_version}
+%{_libdir}/samba/libpytalloc-util.cpython-*.so.2
+%{_libdir}/samba/libpytalloc-util.cpython-*.so.%{talloc_version}
 %{_mandir}/man3/talloc.3.gz
 %endif
 
@@ -1374,6 +1499,8 @@ rm -rf %{buildroot}
 %{_libdir}/samba/libldb.so.%{ldb_version}
 %{_libdir}/samba/libpyldb-util.so.1
 %{_libdir}/samba/libpyldb-util.so.%{ldb_version}
+%{_libdir}/samba/libpyldb-util.cpython-*.so.1
+%{_libdir}/samba/libpyldb-util.cpython-*.so.%{ldb_version}
 %{_mandir}/man3/ldb.3.gz
 %endif
 
@@ -1411,7 +1538,7 @@ rm -rf %{buildroot}
 %{_libdir}/samba/pdb/ldapsam.so
 %{_libdir}/samba/pdb/smbpasswd.so
 %{_libdir}/samba/pdb/tdbsam.so
-%{_libdir}/samba/pdb/wbc_sam.so
+#{_libdir}/samba/pdb/wbc_sam.so  # Removed upstream (b9e76cc8e1690e2a5b9608e9ead8aa45a5349485)
 
 %files common-tools
 %defattr(-,root,root)
@@ -1421,12 +1548,16 @@ rm -rf %{buildroot}
 %{_bindir}/smbcontrol
 %{_bindir}/smbpasswd
 %{_bindir}/testparm
+# Added upstream (32116e015b14cfa697569fce01daf8cde3285970):
+%{_bindir}/mvxattr
 %{_mandir}/man1/profiles.1*
 %{_mandir}/man1/smbcontrol.1*
 %{_mandir}/man1/testparm.1*
 %{_mandir}/man8/net.8*
 %{_mandir}/man8/pdbedit.8*
 %{_mandir}/man8/smbpasswd.8*
+# Added upstream (32116e015b14cfa697569fce01daf8cde3285970):
+%{_mandir}/man1/mvxattr.1*
 
 ### DC
 %files dc
@@ -1542,6 +1673,10 @@ rm -rf %{buildroot}
 %{_includedir}/samba-4.0/core/hresult.h
 %{_includedir}/samba-4.0/core/ntstatus.h
 %{_includedir}/samba-4.0/core/werror.h
+# Added upstream (b7b289f372535dc479a9c9b7ea80da4711edf4f8):
+%{_includedir}/samba-4.0/core/ntstatus_gen.h
+# Added upstream (b7b289f372535dc479a9c9b7ea80da4711edf4f8):
+%{_includedir}/samba-4.0/core/werror_gen.h
 %{_includedir}/samba-4.0/credentials.h
 %{_includedir}/samba-4.0/dcerpc.h
 %{_includedir}/samba-4.0/domain_credentials.h
@@ -1615,6 +1750,7 @@ rm -rf %{buildroot}
 %{_includedir}/samba-4.0/util/tevent_ntstatus.h
 %{_includedir}/samba-4.0/util/tevent_unix.h
 %{_includedir}/samba-4.0/util/tevent_werror.h
+%{_includedir}/samba-4.0/util/tfork.h
 %{_includedir}/samba-4.0/util/time.h
 %{_includedir}/samba-4.0/util_ldb.h
 %{_libdir}/libdcerpc-binding.so
@@ -1690,6 +1826,8 @@ rm -rf %{buildroot}
 
 # libraries needed by the public libraries
 %{_libdir}/samba/libMESSAGING-samba4.so
+# Added upstream (c008687ffbf18a3327dd4ad41ca5a9e01c30f9d1):
+%{_libdir}/samba/libMESSAGING-SEND-samba4.so
 %{_libdir}/samba/libLIBWBCLIENT-OLD-samba4.so
 %{_libdir}/samba/libauth4-samba4.so
 %{_libdir}/samba/libauth-unix-token-samba4.so
@@ -1801,6 +1939,12 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %{python_sitearch}/*
 
+### PYTHON3
+%files -n python3-%{name}
+%defattr(-,root,root,-)
+%dir %{python3_sitearch}/samba/
+%{python3_sitearch}/samba/*
+
 ### TEST
 %files test
 %defattr(-,root,root)
@@ -1822,6 +1966,8 @@ rm -rf %{buildroot}
 %{_libdir}/samba/libsocket-wrapper.so
 %{_libdir}/samba/libuid-wrapper.so
 %endif
+
+#%{_libdir}/samba/libcmocka-samba4.so
 
 ### TEST-LIBS
 %files test-libs
@@ -2647,6 +2793,12 @@ rm -rf %{buildroot}
 %endif # with_clustering_support
 
 %changelog
+* Fri Jun 23 2017 Petr Viktorin <pviktori@redhat.com> - 4.7-1.py3patch
+- Use upstream master branch
+- Build with experimental Python 3 support
+- Configure and build with system versions of pytalloc-util and pyldb-util
+- Remove Python 3 modules that still contain syntax errors
+
 * Mon Jun 12 2017 Guenther Deschner <gdeschner@redhat.com> - 4.6.5-0
 - Update to Samba 4.6.5
 

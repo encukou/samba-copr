@@ -8,7 +8,7 @@
 
 # XXX: Using a Github fork
 %define github_commit d92a23e
-%define main_release 5.py3patch.%{github_commit}
+%define main_release 6.py3patch.%{github_commit}
 
 %define samba_version 4.6.0
 %define talloc_version 2.1.8
@@ -74,8 +74,6 @@
 %endif
 
 %{!?python_sitearch: %define python_sitearch %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib(1)")}
-
-%global __os_install_post %(echo '%{__os_install_post}' | sed -e 's!/usr/lib[^[:space:]]*/brp-python-bytecompile[[:space:]].*$!!g')
 
 Name:           samba
 Version:        %{samba_version}
@@ -787,6 +785,79 @@ make %{?_smp_mflags}
 %install
 rm -rf %{buildroot}
 make %{?_smp_mflags} install DESTDIR=%{buildroot}
+
+# XXX: Remove Python3 files with bad syntax
+# (needs to be done after install; before that the py2 and py3 versions
+#  are the same)
+filenames=$(echo "
+    dbchecker.py
+    drs_utils.py
+    join.py
+    kcc/__init__.py
+    kcc/graph_utils.py
+    kcc/kcc_utils.py
+    kcc/ldif_import_export.py
+    ms_display_specifiers.py
+    ms_schema.py
+    netcmd/__init__.py
+    netcmd/common.py
+    netcmd/delegation.py
+    netcmd/dns.py
+    netcmd/domain.py
+    netcmd/drs.py
+    netcmd/fsmo.py
+    netcmd/gpo.py
+    netcmd/group.py
+    netcmd/ldapcmp.py
+    netcmd/ntacl.py
+    netcmd/rodc.py
+    netcmd/sites.py
+    netcmd/testparm.py
+    netcmd/user.py
+    ntacls.py
+    provision/__init__.py
+    provision/backend.py
+    provision/sambadns.py
+    remove_dc.py
+    sites.py
+    subnets.py
+    tests/auth_log.py
+    tests/auth_log_base.py
+    tests/auth_log_pass_change.py
+    tests/blackbox/ndrdump.py
+    tests/dcerpc/array.py
+    tests/dcerpc/dnsserver.py
+    tests/dcerpc/integer.py
+    tests/dcerpc/sam.py
+    tests/dcerpc/testrpc.py
+    tests/dcerpc/unix.py
+    tests/dns.py
+    tests/dns_forwarder.py
+    tests/dns_forwarder_helpers/server.py
+    tests/dns_tkey.py
+    tests/docs.py
+    tests/netcmd.py
+    tests/posixacl.py
+    tests/samba3.py
+    tests/samba3sam.py
+    tests/samba_tool/dnscmd.py
+    tests/samba_tool/fsmo.py
+    tests/source.py
+    upgrade.py
+    upgradehelpers.py
+    web_server/__init__.py
+")
+for file in $filenames; do
+    filename="%{buildroot}/%{python3_sitearch}/samba/$file"
+    if python3 -c "with open('$filename') as f: compile(f.read(), '$file', 'exec')"; then
+        echo "python3 compilation of $file succeeded unexpectedly"
+        exit 1
+    else
+        echo "python3 compilation of $file failed, removing"
+        rm "$filename"
+    fi
+done
+
 
 install -d -m 0755 %{buildroot}/usr/{sbin,bin}
 install -d -m 0755 %{buildroot}%{_libdir}/security
@@ -2040,6 +2111,9 @@ rm -rf %{buildroot}
 %endif # with_clustering_support
 
 %changelog
+* Wed Apr 12 2017 Petr Viktorin <pviktori@redhat.com> - 4.6.0rc1-6.py3patch
+- Remove Python 3 modules that still contain syntax errors
+
 * Wed Apr 12 2017 Petr Viktorin <pviktori@redhat.com> - 4.6.0rc1-5.py3patch
 - Use upstream master branch
 
